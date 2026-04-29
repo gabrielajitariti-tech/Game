@@ -1,0 +1,112 @@
+{
+  "theme": "dark",
+  "archetype": "5",
+  "archetype_name": "Jewel & Luxury (Dark Fantasy Adaptation)",
+  "emotional_tone": "Mysterious, melancholic, epic, and precise.",
+  "colors": {
+    "background": {
+      "main": "#050507",
+      "surface": "#0F1115",
+      "surface_glass": "rgba(10, 10, 12, 0.8)",
+      "overlay": "rgba(0, 0, 0, 0.7)"
+    },
+    "text": {
+      "primary": "#E2E8F0",
+      "secondary": "#94A3B8",
+      "disabled": "#475569",
+      "accent": "#FACC15"
+    },
+    "brand": {
+      "primary": "#7F1D1D",
+      "primary_hover": "#991B1B",
+      "secondary": "#1E3A8A",
+      "accent": "#9D4CDD"
+    },
+    "game_ui": {
+      "health": "#DC2626",
+      "mana_soul": "#38BDF8",
+      "stamina": "#FBBF24",
+      "border": "rgba(255, 255, 255, 0.15)",
+      "border_glow": "rgba(255, 255, 255, 0.3)"
+    }
+  },
+  "typography": {
+    "font_families": {
+      "heading": "Cormorant Garamond, serif",
+      "body": "Outfit, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "sizes": {
+      "h1": "text-5xl sm:text-6xl tracking-tight font-bold",
+      "h2": "text-3xl sm:text-4xl tracking-tight",
+      "h3": "text-xl sm:text-2xl",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm tracking-wide uppercase",
+      "tiny": "text-xs tracking-[0.2em] uppercase"
+    }
+  },
+  "spacing_and_layout": {
+    "container_padding": "p-8 md:p-12",
+    "section_gap": "gap-12 md:gap-24",
+    "bento_grid": "grid grid-cols-1 md:grid-cols-12 gap-6",
+    "alignment": {
+      "headers": "center",
+      "body": "left",
+      "menus": "center"
+    }
+  },
+  "surface_strategies": {
+    "main_menu": "Crystal Glass - bg-black/60 backdrop-blur-2xl border-t border-b border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.8)]",
+    "hud": "Minimalist - Transparent background, elements rely on drop-shadows (drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]) for contrast over game canvas.",
+    "inventory_panel": "Neumorphic/Tactile Dark - bg-[#0A0A0C] border border-white/10 shadow-2xl rounded-sm p-6"
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-transparent border border-red-900/50 text-red-50 hover:bg-red-900/20 hover:border-red-500 hover:text-white transition-all duration-300 px-8 py-3 tracking-[0.2em] uppercase text-sm font-bold",
+      "secondary": "bg-transparent text-slate-300 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-all duration-300 px-6 py-2 tracking-widest uppercase text-xs"
+    },
+    "inventory_slot": {
+      "default": "w-16 h-16 bg-white/5 border border-white/10 hover:border-white/30 hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer",
+      "equipped": "w-16 h-16 bg-blue-900/20 border border-blue-500/50 shadow-[inset_0_0_15px_rgba(59,130,246,0.2)] flex items-center justify-center cursor-pointer"
+    },
+    "progress_bars": {
+      "health": "h-3 bg-neutral-900 border border-white/10 overflow-hidden relative after:content-[''] after:absolute after:inset-0 after:bg-red-600 after:w-full",
+      "mana": "h-2 bg-neutral-900 border border-white/10 overflow-hidden relative after:content-[''] after:absolute after:inset-0 after:bg-sky-500 after:w-[60%]"
+    }
+  },
+  "motion": {
+    "hover": "transition-all duration-300 ease-out",
+    "menu_enter": "animate-in fade-in zoom-in-95 duration-500",
+    "dialog_overlay": "animate-in fade-in duration-300 bg-black/80 backdrop-blur-sm"
+  },
+  "media": {
+    "images": [
+      {
+        "url": "https://images.pexels.com/photos/29672206/pexels-photo-29672206.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Gothic castle background shrouded in mist",
+        "category": "main_menu_background"
+      },
+      {
+        "url": "https://images.pexels.com/photos/7826034/pexels-photo-7826034.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Atmospheric abandoned stone cellar",
+        "category": "inventory_background_overlay"
+      }
+    ]
+  },
+  "icons": {
+    "library": "lucide-react",
+    "stroke_width": 1.5,
+    "usage": "Use for UI elements like settings, close buttons, and inventory categories. Keep them subtle with opacity-70 by default, opacity-100 on hover."
+  },
+  "instructions_to_main_agent": [
+    "Use standard React for the DOM-based UI (Main Menu, HUD Overlay, Pause Menu, Inventory).",
+    "The actual game should be rendered on an HTML5 `<canvas>` using a game loop (requestAnimationFrame).",
+    "Overlay the React UI on top of the canvas using absolute/fixed positioning and pointer-events-none where necessary so clicks pass through to the game canvas unless interacting with a menu.",
+    "For the typography, import Cormorant Garamond and Outfit from Google Fonts.",
+    "Implement the 'Main Menu' with the provided gothic castle background image. Use a heavy dark overlay to ensure text contrast.",
+    "The HUD should be absolutely positioned at the top left/right. Health bars should use the provided red accent, mana/stamina should use sky blue/amber. Do not use generic Shadcn progress bars, build custom jagged or sharp-edged bars via Tailwind.",
+    "For the inventory system, implement a bento-grid layout overlay that pauses the game when opened. Use a dark glassmorphism panel.",
+    "Ensure the game canvas handles basic physics (gravity, velocity), collision detection, and input handling for movement (WASD/Arrows), jumping (Space), dash (Shift), and attacking (J/Left Click).",
+    "All interactive UI buttons must have 'data-testid' attributes."
+  ]
+}
