@@ -212,9 +212,284 @@ class Wraith extends BaseEnemy {
   }
 }
 
+class DemonKnight extends BaseEnemy {
+  constructor(x, y) {
+    super(x, y, 'demon_knight');
+    this.phase = 1;
+    this.abilities = { charge: 3, slam: 5, barrage: 10, summon: 15, teleport: 8 };
+    this.charging = false;
+    this.chargeDir = 1;
+    this.chargeTimer = 0;
+    this.slamming = false;
+    this.slamPhase = '';
+    this.slamTimer = 0;
+    this.shockwave = null;
+    this.barraging = false;
+    this.barrageTimer = 0;
+    this.summoning = false;
+    this.summonTimer = 0;
+    this.shouldSpawnMinions = false;
+    this.teleporting = false;
+    this.teleportPhase = '';
+    this.teleportTimer = 0;
+    this.teleportTarget = null;
+    this.visible = true;
+    this.projectiles = [];
+    this.phaseTransition = false;
+    this.phaseTransitionTimer = 0;
+  }
+
+  update(dt, player, platforms) {
+    if (!this.alive) { this.deathTimer -= dt; return; }
+    this.updateTimers(dt);
+
+    // Update projectiles
+    this.projectiles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.lifetime -= dt; });
+    this.projectiles = this.projectiles.filter(p => p.lifetime > 0);
+
+    // Phase check
+    if (this.health / this.maxHealth <= 0.5 && this.phase === 1) {
+      this.phase = 2;
+      this.phaseTransition = true;
+      this.phaseTransitionTimer = 1.0;
+      this.invincibleTimer = 1.0;
+      this.vx = 0;
+    }
+
+    if (this.phaseTransition) {
+      this.phaseTransitionTimer -= dt;
+      if (this.phaseTransitionTimer <= 0) this.phaseTransition = false;
+      this.updateAnimation(dt);
+      return;
+    }
+
+    if (this.charging) { this.updateCharge(dt, platforms); return; }
+    if (this.slamming) { this.updateSlam(dt, platforms); return; }
+    if (this.barraging) { this.updateBarrage(dt, player); return; }
+    if (this.summoning) { this.updateSummon(dt); return; }
+    if (this.teleporting) { this.updateTeleport(dt, player, platforms); return; }
+
+    this.chooseAction(dt, player);
+    applyGravity(this, dt);
+    moveEntity(this, dt);
+    resolveCollisions(this, platforms);
+    this.updateAnimation(dt);
+  }
+
+  chooseAction(dt, player) {
+    const dx = player.x - this.x;
+    const dist = Math.abs(dx);
+    this.facing = dx > 0 ? 1 : -1;
+    for (const k in this.abilities) { if (this.abilities[k] > 0) this.abilities[k] -= dt; }
+    if (!player.alive || this.hurtTimer > 0) { this.vx *= 0.9; return; }
+
+    // Phase 2 abilities
+    if (this.phase === 2) {
+      if (this.abilities.teleport <= 0 && dist > 250) { this.startTeleport(player); return; }
+      if (this.abilities.barrage <= 0 && dist > 120) { this.startBarrage(player); return; }
+      if (this.abilities.summon <= 0) { this.startSummon(); return; }
+    }
+    // Shared abilities
+    if (this.abilities.slam <= 0 && dist < 200) { this.startSlam(); return; }
+    if (this.abilities.charge <= 0 && dist > 120 && dist < 500) { this.startCharge(player); return; }
+    // Melee
+    if (dist < this.config.attackRange + 15 && this.attackCooldown <= 0) {
+      this.attacking = true;
+      this.attackTimer = this.phase === 2 ? 0.25 : 0.35;
+      this.attackCooldown = this.phase === 2 ? 0.6 : 1.0;
+      this.vx = 0;
+      this.state = 'attack';
+      return;
+    }
+    this.state = 'chase';
+    this.vx = this.facing * this.speed * (this.phase === 2 ? 1.4 : 1);
+  }
+
+  startCharge(player) {
+    this.charging = true;
+    this.chargeDir = player.x > this.x ? 1 : -1;
+    this.facing = this.chargeDir;
+    this.chargeTimer = 0.4;
+    this.abilities.charge = this.phase === 2 ? 2.5 : 4;
+    this.vx = 0;
+    this.state = 'charge_windup';
+  }
+
+  updateCharge(dt, platforms) {
+    this.chargeTimer -= dt;
+    if (this.state === 'charge_windup') {
+      if (this.chargeTimer <= 0) {
+        this.state = 'charging';
+        this.chargeTimer = 0.5;
+        this.vx = this.chargeDir * (this.phase === 2 ? 750 : 550);
+      }
+    } else {
+      applyGravity(this, dt);
+      moveEntity(this, dt);
+      resolveCollisions(this, platforms);
+      if (this.chargeTimer <= 0) { this.charging = false; this.vx = 0; this.state = 'idle'; }
+    }
+    this.updateAnimation(dt);
+  }
+
+  startSlam() {
+    this.slamming = true;
+    this.slamPhase = 'jump';
+    this.slamTimer = 0.35;
+    this.vy = -650;
+    this.abilities.slam = this.phase === 2 ? 3 : 5;
+    this.vx = 0;
+    this.state = 'slam_jump';
+  }
+
+  updateSlam(dt, platforms) {
+    this.slamTimer -= dt;
+    if (this.slamPhase === 'jump') {
+      applyGravity(this, dt);
+      moveEntity(this, dt);
+      resolveCollisions(this, platforms);
+      if (this.vy >= 0 || this.slamTimer <= 0) {
+        this.slamPhase = 'fall';
+        this.vy = 900;
+        this.slamTimer = 1.2;
+      }
+    } else if (this.slamPhase === 'fall') {
+      this.vy = 900;
+      moveEntity(this, dt);
+      resolveCollisions(this, platforms);
+      if (this.onGround) {
+        this.slamPhase = 'impact';
+        this.slamTimer = 0.6;
+        this.vy = 0; this.vx = 0;
+        this.shockwave = {
+          x: this.x + this.width / 2, y: this.y + this.height,
+          radius: 0, maxRadius: 220,
+          damage: this.phase === 2 ? 28 : 18,
+          active: true, timer: 0.35, hit: false,
+        };
+        this.state = 'slam_impact';
+      }
+    } else if (this.slamPhase === 'impact') {
+      if (this.shockwave && this.shockwave.active) {
+        this.shockwave.radius += 600 * dt;
+        this.shockwave.timer -= dt;
+        if (this.shockwave.timer <= 0 || this.shockwave.radius >= this.shockwave.maxRadius) {
+          this.shockwave.active = false;
+        }
+      }
+      if (this.slamTimer <= 0) { this.slamming = false; this.shockwave = null; this.state = 'idle'; }
+    }
+    this.updateAnimation(dt);
+  }
+
+  startBarrage(player) {
+    this.barraging = true;
+    this.barrageTimer = 0.5;
+    this.abilities.barrage = 6;
+    this.vx = 0;
+    this.state = 'barrage';
+    this.facing = player.x > this.x ? 1 : -1;
+  }
+
+  updateBarrage(dt, player) {
+    this.barrageTimer -= dt;
+    if (this.barrageTimer <= 0) {
+      const baseAngle = Math.atan2(player.y - this.y, player.x - this.x);
+      for (let i = -2; i <= 2; i++) {
+        const a = baseAngle + i * 0.22;
+        this.projectiles.push({
+          x: this.x + this.width / 2, y: this.y + this.height / 2,
+          width: 10, height: 10,
+          vx: Math.cos(a) * 300, vy: Math.sin(a) * 300,
+          damage: 14, lifetime: 2.5,
+        });
+      }
+      this.barraging = false;
+      this.state = 'idle';
+    }
+    this.updateAnimation(dt);
+  }
+
+  startSummon() {
+    this.summoning = true;
+    this.summonTimer = 0.8;
+    this.abilities.summon = 15;
+    this.vx = 0;
+    this.state = 'summoning';
+    this.invincibleTimer = 0.8;
+  }
+
+  updateSummon(dt) {
+    this.summonTimer -= dt;
+    if (this.summonTimer <= 0) {
+      this.summoning = false;
+      this.shouldSpawnMinions = true;
+      this.state = 'idle';
+    }
+    this.updateAnimation(dt);
+  }
+
+  startTeleport(player) {
+    this.teleporting = true;
+    this.teleportPhase = 'vanish';
+    this.teleportTimer = 0.25;
+    this.teleportTarget = { x: player.x + player.facing * -50, y: player.y };
+    this.abilities.teleport = this.phase === 2 ? 4 : 6;
+    this.vx = 0;
+    this.state = 'teleport';
+  }
+
+  updateTeleport(dt, player, platforms) {
+    this.teleportTimer -= dt;
+    if (this.teleportPhase === 'vanish') {
+      this.visible = this.teleportTimer > 0.12;
+      if (this.teleportTimer <= 0) {
+        this.x = this.teleportTarget.x;
+        this.y = this.teleportTarget.y;
+        this.facing = player.x > this.x ? 1 : -1;
+        this.teleportPhase = 'appear';
+        this.teleportTimer = 0.15;
+        this.visible = true;
+      }
+    } else if (this.teleportPhase === 'appear') {
+      if (this.teleportTimer <= 0) {
+        this.teleportPhase = 'slash';
+        this.teleportTimer = 0.3;
+        this.attacking = true;
+        this.attackTimer = 0.3;
+        this.state = 'teleport_slash';
+      }
+    } else if (this.teleportPhase === 'slash') {
+      if (this.teleportTimer <= 0) {
+        this.teleporting = false;
+        this.attacking = false;
+        this.state = 'idle';
+      }
+    }
+    applyGravity(this, dt);
+    moveEntity(this, dt);
+    resolveCollisions(this, platforms);
+    this.updateAnimation(dt);
+  }
+
+  takeDamage(amount, fromDir) {
+    if (this.invincibleTimer > 0 || !this.alive) return;
+    const actualDamage = (this.charging || this.slamming) ? Math.floor(amount * 0.5) : amount;
+    this.health -= actualDamage;
+    this.hurtTimer = 0.15;
+    this.invincibleTimer = 0.2;
+    this.vx = fromDir * 60;
+    this.vy = -40;
+    if (this.health <= 0) { this.alive = false; this.deathTimer = 1.2; }
+  }
+}
+
 export function createEnemy(spawnData) {
   if (spawnData.type === 'wraith') {
     return new Wraith(spawnData.x, spawnData.y);
+  }
+  if (spawnData.type === 'demon_knight') {
+    return new DemonKnight(spawnData.x, spawnData.y);
   }
   return new BaseEnemy(spawnData.x, spawnData.y, spawnData.type);
 }

@@ -22,6 +22,7 @@ export class GameEngine {
     this.enemies = [];
     this.platforms = [];
     this.pickups = [];
+    this.chests = [];
 
     this.gameState = 'menu';
     this.running = false;
@@ -40,6 +41,7 @@ export class GameEngine {
 
     this.enemies = level.enemies.map(e => createEnemy(e));
     this.pickups = level.pickups.map(p => ({ ...p, collected: false }));
+    this.chests = (level.chests || []).map(c => ({ ...c }));
 
     this.camera.setBounds(level.worldWidth, level.worldHeight);
     this.victoryTriggered = false;
@@ -140,6 +142,8 @@ export class GameEngine {
     this.checkPlayerAttacks();
     this.checkEnemyAttacks();
     this.checkPickups();
+    this.checkChests();
+    this.checkBossAbilities();
 
     this.camera.follow(this.player, this.canvas.width, this.canvas.height, dt);
 
@@ -237,12 +241,82 @@ export class GameEngine {
     });
   }
 
+  checkChests() {
+    this.chests.forEach(chest => {
+      if (chest.opened) return;
+      const cx = chest.x + 16;
+      const cy = chest.y + 14;
+      const px = this.player.x + this.player.width / 2;
+      const py = this.player.y + this.player.height / 2;
+      const dist = Math.hypot(px - cx, py - cy);
+      if (dist < 45) {
+        chest.opened = true;
+        const item = getItemById(chest.loot);
+        if (item) {
+          this.player.inventory.push(item);
+          this.particles.emit(cx, cy, 20, {
+            color: COLORS.PICKUP_ITEM, spread: 150, vy: -120, lifetime: 0.7, size: 4,
+          });
+          this.particles.emit(cx, cy - 10, 8, {
+            color: '#ffffff', spread: 60, vy: -80, lifetime: 0.5, size: 2,
+          });
+        }
+      }
+    });
+  }
+
+  checkBossAbilities() {
+    this.enemies.forEach((e, idx) => {
+      if (e.type !== 'demon_knight' || !e.alive) return;
+
+      // Shockwave damage
+      if (e.shockwave && e.shockwave.active && !e.shockwave.hit) {
+        const dx = (this.player.x + this.player.width / 2) - e.shockwave.x;
+        const dy = (this.player.y + this.player.height / 2) - e.shockwave.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < e.shockwave.radius + 20 && dist > e.shockwave.radius - 40) {
+          this.player.takeDamage(e.shockwave.damage);
+          e.shockwave.hit = true;
+          this.particles.emit(this.player.x + this.player.width / 2, this.player.y + this.player.height / 2, 12, {
+            color: '#ff6600', spread: 150, lifetime: 0.4, size: 4,
+          });
+        }
+      }
+
+      // Charge collision damage
+      if (e.state === 'charging' && this.player.alive) {
+        if (aabb(e, this.player)) {
+          this.player.takeDamage(e.damage);
+          this.particles.emit(this.player.x + this.player.width / 2, this.player.y + this.player.height / 2, 10, {
+            color: '#ff4444', spread: 120, lifetime: 0.3, size: 3,
+          });
+        }
+      }
+
+      // Spawn minions
+      if (e.shouldSpawnMinions) {
+        e.shouldSpawnMinions = false;
+        for (let i = 0; i < 2; i++) {
+          const mx = e.x + (i === 0 ? -80 : e.width + 80);
+          const minion = createEnemy({ type: 'skeleton', x: mx, y: e.y });
+          minion.health = 20;
+          minion.maxHealth = 20;
+          this.enemies.push(minion);
+        }
+        this.particles.emit(e.x + e.width / 2, e.y + e.height / 2, 25, {
+          color: '#ff3300', spread: 200, vy: -100, lifetime: 0.7, size: 5,
+        });
+      }
+    });
+  }
+
   renderFrame() {
     this.renderer.render({
       player: this.player,
       enemies: this.enemies,
       platforms: this.platforms,
       pickups: this.pickups,
+      chests: this.chests,
       projectiles: this.player?.specialProjectile ? [this.player.specialProjectile] : [],
       particles: this.particles,
       camera: this.camera,

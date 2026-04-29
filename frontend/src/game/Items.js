@@ -100,6 +100,35 @@ export const ITEMS = {
     bonusDamage: 10,
     icon: 'gem',
   },
+  cursed_blade: {
+    id: 'cursed_blade',
+    name: 'Cursed Blade',
+    slot: 'weapon',
+    rarity: 'epic',
+    description: 'Power at a terrible price. Cuts deep but leaves you exposed.',
+    bonusDamage: 18,
+    icon: 'sword',
+  },
+  dragon_scale: {
+    id: 'dragon_scale',
+    name: 'Dragon Scale',
+    slot: 'armor',
+    rarity: 'legendary',
+    description: 'Scales of an ancient dragon. Nearly indestructible.',
+    bonusDefense: 14,
+    bonusHealth: 35,
+    icon: 'shield',
+  },
+  soul_siphon: {
+    id: 'soul_siphon',
+    name: 'Soul Siphon',
+    slot: 'accessory',
+    rarity: 'epic',
+    description: 'Drains essence from the darkness itself.',
+    bonusDamage: 8,
+    bonusMana: 25,
+    icon: 'gem',
+  },
 };
 
 export const RARITY_COLORS = {

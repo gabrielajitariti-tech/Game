@@ -7,13 +7,14 @@ export class Renderer {
   }
 
   render(state) {
-    const { player, enemies, platforms, pickups, projectiles, particles, camera } = state;
+    const { player, enemies, platforms, pickups, chests, projectiles, particles, camera } = state;
     const ctx = this.ctx;
     const w = this.canvas.width;
     const h = this.canvas.height;
 
     this.drawBackground(camera, w, h);
     this.drawPlatforms(platforms, camera, w, h);
+    this.drawChests(chests, camera, w);
     this.drawPickups(pickups, camera, w);
     enemies.forEach(e => this.drawEnemy(e, camera, w));
     if (projectiles) projectiles.forEach(p => this.drawProjectile(p, camera));
@@ -276,6 +277,74 @@ export class Renderer {
     if (!enemy.alive) ctx.globalAlpha = Math.max(0, enemy.deathTimer * 2);
     if (enemy.hurtTimer > 0 && Math.floor(performance.now() / 60) % 2) ctx.globalAlpha = 0.5;
 
+    // Boss visibility (teleport)
+    if (enemy.visible === false) {
+      ctx.globalAlpha = 1;
+      // Still draw projectiles when invisible
+      if (enemy.projectiles) {
+        enemy.projectiles.forEach(p => {
+          const ppx = p.x - camera.x;
+          const ppy = p.y - camera.y;
+          ctx.fillStyle = enemy.config.eyeColor;
+          ctx.shadowColor = enemy.config.eyeColor;
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.arc(ppx, ppy, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        });
+      }
+      return;
+    }
+
+    // Boss phase transition aura
+    if (enemy.type === 'demon_knight' && enemy.phaseTransition) {
+      ctx.save();
+      ctx.fillStyle = `rgba(255, 60, 0, ${0.15 + Math.sin(performance.now() / 100) * 0.1})`;
+      ctx.shadowColor = '#ff3300';
+      ctx.shadowBlur = 40;
+      ctx.beginPath();
+      ctx.arc(ex + enemy.width / 2, ey + enemy.height / 2, 60, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    // Boss phase 2 aura
+    if (enemy.type === 'demon_knight' && enemy.phase === 2 && enemy.alive) {
+      ctx.save();
+      ctx.fillStyle = `rgba(255, 40, 0, ${0.04 + Math.sin(performance.now() / 400) * 0.03})`;
+      ctx.beginPath();
+      ctx.arc(ex + enemy.width / 2, ey + enemy.height / 2, 50, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Boss charge trail
+    if (enemy.type === 'demon_knight' && enemy.state === 'charging') {
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = enemy.config.color;
+      ctx.fillRect(ex - enemy.facing * 20, ey + 10, enemy.width, enemy.height - 20);
+      ctx.fillRect(ex - enemy.facing * 40, ey + 15, enemy.width - 8, enemy.height - 30);
+      ctx.globalAlpha = 1;
+      if (!enemy.alive) ctx.globalAlpha = Math.max(0, enemy.deathTimer * 2);
+    }
+
+    // Boss summoning effect
+    if (enemy.type === 'demon_knight' && enemy.summoning) {
+      ctx.save();
+      const pulse = Math.sin(performance.now() / 80) * 0.3 + 0.7;
+      ctx.strokeStyle = `rgba(255, 50, 0, ${pulse * 0.5})`;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#ff3300';
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(ex + enemy.width / 2, ey + enemy.height, 70 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.translate(ex + enemy.width / 2, ey + enemy.height / 2);
     ctx.scale(enemy.facing, 1);
@@ -298,7 +367,7 @@ export class Renderer {
       ctx.fillRect(bx, by, bw * (enemy.health / enemy.maxHealth), 3);
     }
 
-    // Wraith projectiles
+    // Wraith/Boss projectiles
     if (enemy.projectiles) {
       enemy.projectiles.forEach(p => {
         const ppx = p.x - camera.x;
@@ -311,6 +380,41 @@ export class Renderer {
         ctx.fill();
         ctx.shadowBlur = 0;
       });
+    }
+
+    // Boss shockwave
+    if (enemy.shockwave && enemy.shockwave.active) {
+      const sx = enemy.shockwave.x - camera.x;
+      const sy = enemy.shockwave.y - camera.y;
+      const progress = enemy.shockwave.radius / enemy.shockwave.maxRadius;
+      const alpha = 1 - progress;
+      ctx.strokeStyle = `rgba(255, 100, 0, ${alpha * 0.8})`;
+      ctx.lineWidth = 4 - progress * 3;
+      ctx.shadowColor = '#ff6600';
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(sx, sy, enemy.shockwave.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      // Inner ring
+      ctx.strokeStyle = `rgba(255, 200, 50, ${alpha * 0.4})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, enemy.shockwave.radius * 0.6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    // Boss barrage windup
+    if (enemy.type === 'demon_knight' && enemy.barraging) {
+      const bx = ex + enemy.width / 2;
+      const by = ey + enemy.height / 2;
+      ctx.fillStyle = `rgba(255, 60, 0, ${0.3 + Math.sin(performance.now() / 50) * 0.2})`;
+      ctx.shadowColor = '#ff3300';
+      ctx.shadowBlur = 25;
+      ctx.beginPath();
+      ctx.arc(bx, by, 20, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
     }
   }
 
@@ -458,6 +562,57 @@ export class Renderer {
       ctx.closePath();
       ctx.fill();
       ctx.shadowBlur = 0;
+    }
+  }
+
+  drawChests(chests, camera, canvasW) {
+    if (!chests) return;
+    const ctx = this.ctx;
+    for (const chest of chests) {
+      const cx = chest.x - camera.x;
+      const cy = chest.y - camera.y;
+      if (cx + 32 < -20 || cx > canvasW + 20) continue;
+
+      if (chest.opened) {
+        // Open chest body
+        ctx.fillStyle = '#2a1a08';
+        ctx.fillRect(cx + 1, cy + 10, 30, 18);
+        // Inside (dark)
+        ctx.fillStyle = '#0a0500';
+        ctx.fillRect(cx + 3, cy + 12, 26, 8);
+        // Lid (tilted back)
+        ctx.fillStyle = '#3a2810';
+        ctx.fillRect(cx, cy, 32, 10);
+        ctx.fillStyle = '#1a0a00';
+        ctx.fillRect(cx + 2, cy + 2, 28, 5);
+      } else {
+        // Glow pulse
+        const glow = Math.sin(performance.now() / 500 + chest.x) * 0.2 + 0.8;
+        ctx.shadowColor = '#FBBF24';
+        ctx.shadowBlur = 14 * glow;
+        // Chest body
+        ctx.fillStyle = '#4a3010';
+        ctx.fillRect(cx, cy + 8, 32, 20);
+        // Metal bands
+        ctx.fillStyle = '#8a7030';
+        ctx.fillRect(cx, cy + 13, 32, 2);
+        ctx.fillRect(cx, cy + 23, 32, 2);
+        // Lid
+        ctx.fillStyle = '#5a4020';
+        ctx.fillRect(cx, cy, 32, 12);
+        ctx.fillStyle = '#3a2810';
+        ctx.fillRect(cx + 2, cy + 2, 28, 7);
+        // Lock
+        ctx.fillStyle = '#FBBF24';
+        ctx.fillRect(cx + 13, cy + 9, 6, 6);
+        ctx.shadowBlur = 0;
+        // Sparkle
+        const sparkle = 0.3 + Math.sin(performance.now() / 300 + chest.x * 0.1) * 0.3;
+        ctx.fillStyle = `rgba(251, 191, 36, ${sparkle})`;
+        ctx.beginPath();
+        ctx.arc(cx + 16, cy - 6, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
